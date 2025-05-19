@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Request, Form
+from fastapi import FastAPI, Request, Form, Depends
 from fastapi.responses import PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 from twilio.twiml.voice_response import VoiceResponse
@@ -26,6 +26,8 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 async def root():
     return {"status": "healthy", "message": "SOLLVR Voice Assistant API is running"}
 
+# Support both GET and POST methods for the voice endpoint
+@app.get("/voice")
 @app.post("/voice")
 async def handle_voice_call(request: Request):
     response = VoiceResponse()
@@ -33,11 +35,33 @@ async def handle_voice_call(request: Request):
     response.record(timeout=5, transcribe=False, max_length=10, action="/process_audio")
     return PlainTextResponse(str(response))
 
+# Helper function to get the RecordingUrl from either query params or form data
+async def get_recording_url(request: Request):
+    if request.method == "GET":
+        # For GET requests, get the RecordingUrl from query parameters
+        query_params = dict(request.query_params)
+        recording_url = query_params.get("RecordingUrl")
+        if not recording_url:
+            raise ValueError("RecordingUrl parameter is required")
+        return recording_url
+    else:
+        # For POST requests, get the RecordingUrl from form data
+        form_data = await request.form()
+        recording_url = form_data.get("RecordingUrl")
+        if not recording_url:
+            raise ValueError("RecordingUrl parameter is required")
+        return recording_url
+
+# Update the process_audio endpoint to handle both GET and POST
+@app.get("/process_audio")
 @app.post("/process_audio")
-async def process_audio(request: Request, RecordingUrl: str = Form(...)):
+async def process_audio(request: Request):
     try:
+        # Get RecordingUrl from the appropriate source
+        recording_url = await get_recording_url(request)
+        
         # Step 1: Download audio from Twilio
-        audio_data = requests.get(RecordingUrl + ".wav").content
+        audio_data = requests.get(recording_url + ".wav").content
 
         # Step 2: Transcribe using Deepgram
         deepgram_response = requests.post(
