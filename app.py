@@ -72,7 +72,8 @@ async def process_audio(request: Request):
         user_text = deepgram_response.json()["results"]["channels"][0]["alternatives"][0]["transcript"]
 
         # Step 3: ChatGPT response
-        chat = openai.ChatCompletion.create(
+        # Ensure compatibility with OpenAI v1.3.0
+        chat_completion = openai.ChatCompletion.create(
             model="gpt-4",
             messages=[
                 {
@@ -96,7 +97,7 @@ NEVER say you are an AI. Always speak as a human agent named 'Sam from SOLLVR.'
                 {"role": "user", "content": user_text}
             ]
         )
-        ai_response = chat["choices"][0]["message"]["content"]
+        ai_response = chat_completion.choices[0].message.content
 
         # Step 4: TTS using ElevenLabs
         tts_response = requests.post(
